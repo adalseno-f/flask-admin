@@ -1,5 +1,15 @@
 # Flask-Admin
 
+This fork adds SQLModel (>= 0.0.18) to Flask-Admin 2.x, with some caveats:
+- SQLModel requires SQLAlchemy 2.x since version 0.0.12, therefore it cannot be merged with the main branch.
+- The work must be considered in alpha stage and must be tested on the field.
+- I removed Python 3.13 support given some testing issues.
+- I used Pdoman in place of Docker. You can change the makefile and the docker files if you use Docker.
+- Type hinting support is still in progress. I had to exlcude view.py, form.py and tools.py from checking.
+- The number of tests for the SQLModel module is overwhelming and must be rationalized, but at present, they are convenient for debugging.
+- There are two example apps for SQLModel: one with almost pure SQLModel syntax, the other one `sqlmodel_sqla` with SQLAlchemy syntax.
+---
+
 Flask-Admin is now part of Pallets-Eco, an open source organization managed by the
 Pallets team to facilitate community maintenance of Flask extensions. Please update
 your references to `https://github.com/pallets-eco/flask-admin.git`.
@@ -14,8 +24,6 @@ your references to `https://github.com/pallets-eco/flask-admin.git`.
 > maintenance of related projects. If you are interested in helping maintain
 > this project, please reach out on [the Pallets Discord server][discord].
 
-[discord]: https://discord.gg/pallets
-
 ## Introduction
 
 Flask-Admin is a batteries-included, simple-to-use
@@ -27,12 +35,11 @@ application.
 
 Out-of-the-box, Flask-Admin plays nicely with various ORM\'s, including
 
--   [SQLAlchemy](https://www.sqlalchemy.org/)
--   [pymongo](https://pymongo.readthedocs.io/)
--   and [Peewee](https://github.com/coleifer/peewee).
+- [SQLAlchemy](https://www.sqlalchemy.org/)
+- [pymongo](https://pymongo.readthedocs.io/)
+- and [Peewee](https://github.com/coleifer/peewee).
 
-It also boasts a simple file management interface and a [Redis
-client](https://redis.io/) console.
+It also boasts a simple file management interface and a [Redis client](https://redis.io/) console.
 
 The biggest feature of Flask-Admin is its flexibility. It aims to provide a
 set of simple tools that can be used to build admin interfaces of
@@ -45,48 +52,26 @@ Flask-Admin is an active project, well-tested and production-ready.
 
 ## Examples
 
-Several usage examples are included in the */examples* folder. Please
-add your own, or improve on the existing examples, and submit a
-*pull-request*.
+Several usage examples are included in the */examples* folder. Please add your own, or improve on the existing examples, and submit a *pull-request*.
 
-To run the examples in your local environment:
-1. Clone the repository:
+### How to run an example
 
-    ```bash
-    git clone https://github.com/pallets-eco/flask-admin.git
-    cd flask-admin
-    ```
-2. Create and activate a virtual environment:
+Clone the repository and navigate to an example (for this example we are using SQLAlchemy Example):
 
-    ```bash
-    # Windows:
-    python -m venv .venv
-    .venv\Scripts\activate
+```shell
+git clone https://github.com/pallets-eco/flask-admin.git
+cd flask-admin/examples/sqla
+```
 
-    # Linux:
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+> All examples use [`uv`](https://docs.astral.sh/uv/) to manage their dependencies and the developer environment.
 
-3. Navigate into the SQLAlchemy example folder:
+Run the example using `uv`, which will manage the environment and dependencies automatically:
 
-    ```bash
-    cd examples/sqla
-    ```
+```shell
+uv run main.py
+```
 
-4. Install requirements:
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-5. Run the application:
-
-    ```bash
-    python app.py
-    ```
-
-6. Check the Flask app running on <http://localhost:5000>.
+Check the Flask app running on <http://localhost:5000>.
 
 ## Documentation
 
@@ -99,7 +84,7 @@ should be included, feel free to make the changes and submit a *pull-request*.
 
 To build the docs in your local environment, from the project directory:
 
-```bash
+```shell
 tox -e docs
 ```
 
@@ -192,3 +177,6 @@ cd babel
 ## As a translator who's updated some `.po`/`.mo` files
 Run `cd babel`
 Run `./babel.sh`
+
+<!-- refs -->
+[discord]: https://discord.gg/pallets
