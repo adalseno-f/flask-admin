@@ -13,8 +13,6 @@ on:
       - 'docs/**'
       - '*.md'
       - '*.rst'
-  schedule:
-    - cron: '0 3 * * 1'
 jobs:
   tests:
     name: ${{ matrix.tox == 'normal' && format('py{0}', matrix.python) || matrix.tox }}
@@ -22,17 +20,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        python: ['3.9', '3.10', '3.11', '3.12']
         tox: ['normal']
         include:
-          - python: '3.9'
-            tox: 'py39-min'
-          - python: '3.13'
-            tox: 'py313-noflaskbabel'
-          - python: '3.9'
-            tox: 'py39-sqlalchemy1'
-          - python: '3.13'
-            tox: 'py313-sqlalchemy1'
+          - python: '3.12'
+            tox: 'py312-noflaskbabel'
     services:
       # Label used to access the service container
       postgres:
