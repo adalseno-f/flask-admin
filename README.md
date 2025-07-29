@@ -1,13 +1,31 @@
 # Flask-Admin
 
 This fork adds SQLModel (>= 0.0.18) to Flask-Admin 2.x, with some caveats:
-- SQLModel requires SQLAlchemy 2.x since version 0.0.12, therefore it cannot be merged with the main branch.
+- SQLModel requires SQLAlchemy 2.x since version 0.0.12, therefore it cannot be merged, at present, with the main branch.
 - The work must be considered in alpha stage and must be tested on the field.
-- I removed Python 3.13 support given some testing issues.
+- I removed Python 3.13 support given some testing issues (works with python >= 3.9, < 3.13).
 - I used Pdoman in place of Docker. You can change the makefile and the docker files if you use Docker.
-- Type hinting support is still in progress. I had to exlcude view.py, form.py and tools.py from checking.
+- Type hinting support is still in progress. All files have been included with some `type ignore`.
 - The number of tests for the SQLModel module is overwhelming and must be rationalized, but at present, they are convenient for debugging.
 - There are two example apps for SQLModel: one with almost pure SQLModel syntax, the other one `sqlmodel_sqla` with SQLAlchemy syntax.
+- I built `sqlmodel` module starting from `sqla` and I thought of it as a self-contained module.
+    - Code duplication can be avoided by reusing `sqla` whenever possible. However, some refactoring is required.
+    - The documentation for the new model can be built via `sphinx`.
+    - There is a README.md file in the tests/sqlmodel folder to explain the tests structure.
+    - In the same folder the file `SQLModel_code_structure.md` gives an overview of the module structure.
+- I have added a command `make docker-shell` that gives you an intercative shell in the (podman) container to run the tests separately, e.g.:
+    - uv run tox -e style                                                           # check for style
+    - uv run tox -e typing                                                          # check for typing
+    - uv run pytest                                                                 # Run all tests
+    - uv run pytest flask_admin/tests/sqlmodel/                                     # Run only SQLModel tests
+    - uv run pytest flask_admin/tests/sqlmodel/test_view.py::TestView::test_create  # Run specific test
+    - uv run pytest -v -s                                                           # Verbose output with print statements
+    - uv run pytest --pdb                                                           # Drop into debugger on failures
+    - uv run tox -e py312                                                           # Run specific tox environment
+    - exit                                                                          # Exit and cleanup
+
+Feel free to test it (not in production) and report any bugs or missing features. Any help in improving the code and making it ready for production/merging is welcome.
+
 ---
 
 Flask-Admin is now part of Pallets-Eco, an open source organization managed by the

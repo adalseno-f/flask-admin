@@ -61,7 +61,9 @@ class BaseSQLModelFilter(filters.BaseFilter):
             self.column: t.Union[Column, tuple[str, property], property] = tmp_value
         else:
             self.column = column
-        self.key_name = None  # Will be set during scaffolding for relationship filters
+        self.key_name: t.Optional[str] = (
+            None  # Will be set during scaffolding for relationship filters
+        )
 
     def _convert_computed_field_to_sql(
         self, prop: property

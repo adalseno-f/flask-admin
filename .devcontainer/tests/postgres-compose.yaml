@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: docker.io/postgis/postgis:16-3.4
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flask_admin_test
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-hstore.sql:/docker-entrypoint-initdb.d/init-hstore.sql
+
+volumes:
+  postgres-data:

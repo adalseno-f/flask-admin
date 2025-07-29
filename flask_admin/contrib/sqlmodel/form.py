@@ -167,7 +167,12 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
 
     def _model_select_field(
         self, prop: t.Any, multiple: bool, remote_model: t.Any, **kwargs: t.Any
-    ) -> t.Union[QuerySelectField, QuerySelectMultipleField]:
+    ) -> t.Union[
+        QuerySelectField,
+        QuerySelectMultipleField,
+        AjaxSelectField,
+        AjaxSelectMultipleField,
+    ]:
         loader = getattr(self.view, "_form_ajax_refs", {}).get(prop.key)
 
         if loader:
@@ -204,7 +209,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
         if not column.foreign_keys:
             column = prop.local_remote_pairs[0][1]
 
-        kwargs["label"] = self._get_label(name, kwargs)
+        kwargs["label"] = self._get_label(name, kwargs)  # type: ignore[arg-type]
         kwargs["description"] = self._get_description(name, kwargs)
 
         # determine optional/required, or respect existing
@@ -278,7 +283,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
             # Fall through to include the field (for mocks/tests)
 
         # Apply label and description
-        kwargs["label"] = self._get_label(name, kwargs)
+        kwargs["label"] = self._get_label(name, kwargs)  # type: ignore[arg-type]
         kwargs["description"] = self._get_description(name, kwargs)
 
         # If no setter, make field read-only
@@ -338,7 +343,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
             return None
 
         # Apply label and description
-        kwargs["label"] = self._get_label(name, kwargs)
+        kwargs["label"] = self._get_label(name, kwargs)  # type: ignore[arg-type]
         kwargs["description"] = self._get_description(name, kwargs)
 
         # If no setter, make field read-only
@@ -376,7 +381,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
         if isinstance(prop, FieldPlaceholder):
             return form.recreate_field(prop.field)
 
-        kwargs = {"validators": [], "filters": []}
+        kwargs: dict[str, t.Any] = {"validators": [], "filters": []}
 
         if field_args:
             kwargs.update(field_args)
@@ -394,7 +399,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
             return field_class_override(**kwargs)
 
         # Handle SQLModel computed fields
-        if issubclass(model, SQLModel) and is_computed_field(model, name):
+        if issubclass(model, SQLModel) and is_computed_field(model, name):  # type: ignore[arg-type]
             computed_fields = get_computed_fields(model)
             field_info = computed_fields.get(name)
             if field_info:
@@ -425,7 +430,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
         elif hasattr(prop, "columns"):  # Ignore pk/fk
             # Check if more than one column mapped to the property
             if len(prop.columns) > 1 and not isinstance(prop, ColumnProperty):
-                columns = filter_foreign_columns(model.__table__, prop.columns)
+                columns = filter_foreign_columns(model.__table__, prop.columns)  # type: ignore[attr-defined]
 
                 if len(columns) == 0:
                     return None
@@ -485,7 +490,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
             optional_types = getattr(self.view, "form_optional_types", (Boolean,))
 
             # For SQLModel, also check if field is Optional in the model definition
-            if issubclass(model, SQLModel):
+            if issubclass(model, SQLModel):  # type: ignore[arg-type]
                 model_fields = getattr(model, "model_fields", {})
                 field_info = model_fields.get(prop.key)
                 is_optional = field_info and not field_info.is_required()
@@ -503,7 +508,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
 
             # Apply label and description if it isn't inline form field
             if self.view.model == mapper.class_:
-                kwargs["label"] = self._get_label(prop.key, kwargs)
+                kwargs["label"] = self._get_label(prop.key, kwargs)  # type: ignore[arg-type]
                 kwargs["description"] = self._get_description(prop.key, kwargs)
 
             # Figure out default value
@@ -521,7 +526,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
                             value = None
 
             # For SQLModel, also check for Pydantic field defaults
-            if value is None and issubclass(model, SQLModel):
+            if value is None and issubclass(model, SQLModel):  # type: ignore[arg-type]
                 from pydantic_core import PydanticUndefined
 
                 model_fields = getattr(model, "model_fields", {})
@@ -552,7 +557,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
                 if choices:
                     # Check if this is an enum field that needs coercion
                     coerce_func = None
-                    if issubclass(model, SQLModel):
+                    if issubclass(model, SQLModel):  # type: ignore[arg-type]
                         model_fields = getattr(model, "model_fields", {})
                         field_info = model_fields.get(prop.key)
                         if field_info:
@@ -600,7 +605,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
                     return form.Select2Field(**field_kwargs)
 
             # For SQLModel, check for special Pydantic types first
-            if issubclass(model, SQLModel):
+            if issubclass(model, SQLModel):  # type: ignore[arg-type]
                 model_fields = getattr(model, "model_fields", {})
                 field_info = model_fields.get(prop.key)
                 if field_info:
@@ -700,14 +705,14 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
         ):
             field_args["validators"].append(validators.Length(max=column.type.length))
         cls._nullable_common(column, field_args)
-        return field_args
+        return field_args  # type: ignore[return-value]
 
     @converts("String")  # includes VARCHAR, CHAR, and Unicode
     def conv_String(
         self, column: t.Any, field_args: T_FIELD_ARGS_FILTERS, **extra: t.Any
     ) -> fields.StringField:
         self._string_common(column=column, field_args=field_args, **extra)
-        return fields.StringField(**field_args)
+        return fields.StringField(**field_args)  # type: ignore[misc]
 
     @converts("sqlmodel.sql.sqltypes.AutoString")  # SQLModel AutoString type
     def conv_AutoString(self, column, field_args, **extra):
@@ -1334,7 +1339,7 @@ class InlineModelConverter(InlineModelConverterBase):
             info = self.form_admin_class(model, **attrs)
 
         # Always process AJAX references
-        info._form_ajax_refs = self.process_ajax_refs(info)
+        info._form_ajax_refs = self.process_ajax_refs(info)  # type: ignore[attr-defined]
 
         return info
 
@@ -1359,8 +1364,8 @@ class InlineModelConverter(InlineModelConverterBase):
     ) -> dict[str, str]:
         result: dict[str, str] = {}
 
-        parent_mapper = parent_model._sa_class_manager.mapper
-        child_mapper = info.model._sa_class_manager.mapper
+        parent_mapper = parent_model._sa_class_manager.mapper  # type: ignore[attr-defined]
+        child_mapper = info.model._sa_class_manager.mapper  # type: ignore[union-attr]
 
         for rel in parent_mapper.relationships:
             if rel.mapper.class_ is info.model:
@@ -1373,7 +1378,7 @@ class InlineModelConverter(InlineModelConverterBase):
                 parent_side = rel.key
 
                 # Find reverse relationship
-                for back_rel in child_mapper.relationships:
+                for back_rel in child_mapper.relationships:  # type: ignore[misc]
                     if back_rel.mapper.class_ is parent_model:
                         child_side = back_rel.key
                         result[parent_side] = child_side
@@ -1401,8 +1406,8 @@ class InlineModelConverter(InlineModelConverterBase):
             rel_type = fld.annotation
             if rel_type is parent_model or (
                 hasattr(rel_type, "__origin__")
-                and rel_type.__origin__ is list
-                and rel_type.__args__[0] is parent_model
+                and rel_type.__origin__ is list  # type: ignore[union-attr]
+                and rel_type.__args__[0] is parent_model  # type: ignore[union-attr]
             ):
                 return name
 
@@ -1510,11 +1515,11 @@ class InlineModelConverter(InlineModelConverterBase):
 
 
 class InlineOneToOneModelConverter(InlineModelConverter):
-    inline_field_list_type = InlineModelOneToOneField
+    inline_field_list_type = InlineModelOneToOneField  # type: ignore[assignment]
 
     def _calculate_mapping_key_pair(self, model: type[SQLModel], info):
         forward_mapper = info.model._sa_class_manager.mapper
-        target_mapper = model._sa_class_manager.mapper
+        target_mapper = model._sa_class_manager.mapper  # type: ignore[attr-defined]
 
         for forward_prop in forward_mapper.relationships:
             if forward_prop.mapper.class_ == target_mapper.class_:

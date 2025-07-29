@@ -20,29 +20,23 @@ from sqlalchemy import and_
 from sqlalchemy import inspect
 from sqlalchemy import or_
 from sqlalchemy import tuple_
-from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm.clsregistry import _class_resolver
-
-from flask_admin.contrib.sqlmodel._types import T_MODEL_FIELD_LIST
-
-# Import centralized types
-from flask_admin.contrib.sqlmodel._types import T_SQLMODEL_PK_VALUE
-
-try:
-    # SQLAlchemy 2.0
-    from sqlalchemy.ext.associationproxy import AssociationProxyExtensionType
-
-    ASSOCIATION_PROXY = AssociationProxyExtensionType.ASSOCIATION_PROXY
-except ImportError:
-    # Fallback for older versions
-    from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
-
 from sqlalchemy.exc import DBAPIError
+
+# SQLAlchemy 2.x only
+from sqlalchemy.ext.associationproxy import (  # type: ignore[attr-defined]
+    AssociationProxyExtensionType,
+)
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm.clsregistry import _class_resolver
 from sqlalchemy.sql.operators import eq  # type: ignore[attr-defined]
 
 from flask_admin._compat import filter_list
 from flask_admin._compat import string_types
+from flask_admin.contrib.sqlmodel._types import T_MODEL_FIELD_LIST
+
+# Import centralized types
+from flask_admin.contrib.sqlmodel._types import T_SQLMODEL_PK_VALUE
 from flask_admin.tools import escape  # noqa: F401
 from flask_admin.tools import iterdecode  # noqa: F401
 from flask_admin.tools import iterencode  # noqa: F401
@@ -89,9 +83,9 @@ try:
 
     PYDANTIC_IP_TYPES_AVAILABLE = True
 except ImportError:
-    IPvAnyAddress = None  # type: ignore[misc]
-    IPv4Address = None  # type: ignore[misc,assignment]
-    IPv6Address = None  # type: ignore[misc,assignment]
+    IPvAnyAddress = None  # type: ignore
+    IPv4Address = None  # type: ignore
+    IPv6Address = None  # type: ignore
     PYDANTIC_IP_TYPES_AVAILABLE = False
 
 # Constrained types (Pydantic v2)
@@ -130,6 +124,9 @@ except ImportError:
 
 if TYPE_CHECKING:
     from pydantic.fields import ComputedFieldInfo
+
+
+ASSOCIATION_PROXY = AssociationProxyExtensionType.ASSOCIATION_PROXY
 
 
 @dataclass

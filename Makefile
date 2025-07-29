@@ -154,8 +154,48 @@ doctest:
 
 .PHONY: test-in-docker
 test-in-docker:
-	podman compose -f .devcontainer/tests/docker-compose.yaml run app uv run pytest
+	podman compose -f .devcontainer/tests/docker-compose.yaml build app
+	podman compose -f .devcontainer/tests/docker-compose.yaml up -d postgres azurite mongo
+	podman compose -f .devcontainer/tests/docker-compose.yaml run --rm app uv run pytest
+	podman compose -f .devcontainer/tests/docker-compose.yaml down
 
 .PHONY: tox-in-docker
 tox-in-docker:
-	podman compose -f .devcontainer/tests/docker-compose.yaml run app uv run tox
+	@echo "Building app container..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml build app
+	@echo "Starting dependency services..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml up -d postgres azurite mongo
+	@echo "Running tox in app container..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml run --rm app uv run tox
+	@echo "Cleaning up services..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml down
+
+.PHONY: docker-cleanup
+docker-cleanup:
+	podman compose -f .devcontainer/tests/docker-compose.yaml down --volumes --remove-orphans
+
+.PHONY: docker-shell
+docker-shell:
+	@echo "Building app container..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml build app
+	@echo "Starting all services..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml up -d
+	@echo "Opening interactive shell in app container..."
+	@echo "Services available: postgres (postgresql://postgres:postgres@postgres/flask_admin_test), azurite, mongo"
+	@echo "Run 'uv run pytest' or 'uv run tox' inside the container, or 'exit' to quit"
+	podman compose -f .devcontainer/tests/docker-compose.yaml exec app bash
+	@echo "Cleaning up services..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml down
+
+.PHONY: docker-shell-run
+docker-shell-run:
+	@echo "Building app container..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml build app
+	@echo "Starting dependency services..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml up -d postgres azurite mongo
+	@echo "Opening interactive shell in app container (run mode)..."
+	@echo "Services available: postgres (postgresql://postgres:postgres@postgres/flask_admin_test), azurite, mongo"
+	@echo "Run 'uv run pytest' or 'uv run tox' inside the container, or 'exit' to quit"
+	podman compose -f .devcontainer/tests/docker-compose.yaml run --rm app bash
+	@echo "Cleaning up services..."
+	podman compose -f .devcontainer/tests/docker-compose.yaml down
