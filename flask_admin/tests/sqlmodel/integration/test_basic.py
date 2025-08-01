@@ -85,6 +85,51 @@ class CustomModelView(SQLModelView):
         "choice_field": [("choice-1", "One"), ("choice-2", "Two")]
     }
 
+    def _get_computed_field_search_expression(self, search_field, alias):
+        """
+        Custom search expressions for computed fields.
+        Returns the column expression that will be used for searching.
+        """
+        prop_func = search_field.fget
+        if prop_func and hasattr(prop_func, "__name__"):
+            func_name = prop_func.__name__
+
+            if func_name == "number_of_pixels_str":
+                # Convert number_of_pixels to string for searching
+                from sqlalchemy import cast
+                from sqlalchemy import String
+
+                if alias is None:
+                    from sqlalchemy import column
+
+                    return cast(column("width") * column("height"), String)
+                else:
+                    return cast(alias.width * alias.height, String)
+
+        # For other computed fields, use parent's implementation (returns None)
+        return super()._get_computed_field_search_expression(search_field, alias)
+
+    def _get_computed_field_sort_expression(self, sort_field, alias):
+        """
+        Custom sort expressions for computed fields.
+        Returns the column expression that will be used for sorting.
+        """
+        prop_func = sort_field.fget
+        if prop_func and hasattr(prop_func, "__name__"):
+            func_name = prop_func.__name__
+
+            if func_name == "number_of_pixels":
+                # Sort by width * height
+                if alias is None:
+                    from sqlalchemy import column
+
+                    return column("width") * column("height")
+                else:
+                    return alias.width * alias.height
+
+        # For other computed fields, use parent's implementation (returns None)
+        return super()._get_computed_field_sort_expression(sort_field, alias)
+
 
 # class CustomModelView(ModelView):
 #     """

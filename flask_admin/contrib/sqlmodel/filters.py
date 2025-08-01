@@ -4,6 +4,11 @@ SQLModel filters for Flask-Admin list views.
 This module provides filter implementations for SQLModel models,
 allowing users to filter list views by various criteria such as
 equality, comparison, and text searches.
+
+Supports both regular SQLModel fields and computed fields/properties:
+- Regular fields: Filtering happens at SQL level for optimal performance
+- Computed fields: Automatic fallback to post-query Python filtering
+- Performance optimization: Use sql_expression methods for SQL-level filtering
 """
 
 import enum
@@ -31,7 +36,16 @@ from flask_admin.model import filters
 
 class BaseSQLModelFilter(filters.BaseFilter):
     """
-    Base SQLModel filter.
+    Base SQLModel filter with support for computed fields and properties.
+
+    This base class automatically handles different types of filterable fields:
+    - Regular SQLModel columns: Direct SQL filtering
+    - Computed fields (@computed_field): Property filter markers for post-processing
+    - Properties with setters: Property filter markers for post-processing
+
+    When filtering computed fields/properties without sql_expression methods,
+    the filter creates property filter markers that trigger post-query Python
+    filtering for correct results.
     """
 
     def __init__(
@@ -45,13 +59,14 @@ class BaseSQLModelFilter(filters.BaseFilter):
         Constructor.
 
         :param column:
-            Model field
+            Model field - can be SQLAlchemy Column, Python property,
+            computed field, or tuple for property filters
         :param name:
-            Display name
+            Display name for the filter
         :param options:
-            Fixed set of options
+            Fixed set of options for choice-based filters
         :param data_type:
-            Client data type
+            Client data type for form rendering
         """
         super().__init__(name, options, data_type)
 
@@ -72,33 +87,17 @@ class BaseSQLModelFilter(filters.BaseFilter):
         Convert computed field property to a SQL expression.
         This is specific to known computed fields.
         """
-        prop_func = prop.fget
-        if prop_func and hasattr(prop_func, "__name__"):
-            func_name = prop_func.__name__
-
-            # Handle known computed field patterns
-            if func_name == "number_of_pixels":
-                # This is a hack for the specific test case
-                # In a real implementation, you'd want a more generic solution
-
-                # Create a SQL expression for width * height
-                # We need to access the model class to get the actual columns
-                # For now, return a placeholder that we'll handle in get_column
-                return ("computed_number_of_pixels", prop)
-
-        # For unknown computed fields, return the property as-is
+        # For computed properties, we generally cannot create SQL expressions
+        # since they combine multiple fields or perform complex calculations.
+        # Return the property as-is to indicate it needs post-query filtering.
         return prop
 
     def get_column(self, alias: t.Optional[t.Any]) -> t.Any:
         # Handle computed fields and properties
         if hasattr(self.column, "key"):
             return self.column if alias is None else getattr(alias, self.column.key)  # type: ignore[union-attr]
-        elif (
-            isinstance(self.column, tuple)
-            and self.column[0] == "computed_number_of_pixels"
-        ):
-            # Special handling for computed number_of_pixels field
-            return self._create_number_of_pixels_expression(alias)
+        # Removed hardcoded computed field handling
+        # - now uses generic property filtering
         elif isinstance(self.column, property):
             # For computed properties, return a special marker indicating
             # that this should be handled as post-query filtering
@@ -106,20 +105,7 @@ class BaseSQLModelFilter(filters.BaseFilter):
         else:
             return self.column
 
-    def _create_number_of_pixels_expression(self, alias):
-        """
-        Create SQL expression for width * height computation.
-        """
-        if alias is None:
-            # We need to dynamically create the expression
-            # This is a limitation - we need access to the model class
-            # For now, create a raw SQL expression using column()
-            from sqlalchemy import column
-
-            return column("width") * column("height")
-        else:
-            # With alias, we can access the columns directly
-            return alias.width * alias.height
+    # Removed hardcoded _create_number_of_pixels_expression method
 
     def apply(
         self, query: T_SQLMODEL_QUERY, value: t.Any, alias: t.Optional[t.Any] = None
@@ -129,6 +115,13 @@ class BaseSQLModelFilter(filters.BaseFilter):
 
 # Common filters
 class FilterEqual(BaseSQLModelFilter):
+    """
+    Equality filter for SQLModel fields.
+
+    Supports both regular columns and computed fields/properties.
+    For computed fields without sql_expression, uses post-query filtering.
+    """
+
     def apply(
         self, query: T_SQLMODEL_QUERY, value: t.Any, alias: t.Optional[t.Any] = None
     ) -> T_SQLMODEL_QUERY:
@@ -153,6 +146,13 @@ class FilterEqual(BaseSQLModelFilter):
 
 
 class FilterNotEqual(BaseSQLModelFilter):
+    """
+    Not-equal filter for SQLModel fields.
+
+    Supports both regular columns and computed fields/properties.
+    For computed fields without sql_expression, uses post-query filtering.
+    """
+
     def apply(
         self, query: T_SQLMODEL_QUERY, value: t.Any, alias: t.Optional[t.Any] = None
     ) -> T_SQLMODEL_QUERY:
@@ -201,28 +201,80 @@ class FilterNotLike(BaseSQLModelFilter):
     def apply(
         self, query: T_SQLMODEL_QUERY, value: t.Any, alias: t.Optional[t.Any] = None
     ) -> T_SQLMODEL_QUERY:
+        column = self.get_column(alias)
+
+        # Check if this is a property filter that needs post-query processing
+        if (
+            isinstance(column, tuple)
+            and len(column) == 2
+            and column[0] == "__PROPERTY_FILTER__"
+        ):
+            query._property_filters = getattr(query, "_property_filters", [])  # type: ignore[union-attr]
+            query._property_filters.append((column[1], "not_contains", value))  # type: ignore[union-attr]
+            return query
+
         stmt = tools.parse_like_term(value)
-        return query.filter(~self.get_column(alias).ilike(stmt))
+        return query.filter(~column.ilike(stmt))
 
     def operation(self) -> str:
         return lazy_gettext("not contains")
 
 
 class FilterGreater(BaseSQLModelFilter):
+    """
+    Greater-than filter for SQLModel fields.
+
+    Supports both regular columns and computed fields/properties.
+    For computed fields without sql_expression, uses post-query filtering
+    with automatic numeric conversion.
+    """
+
     def apply(
         self, query: T_SQLMODEL_QUERY, value: t.Any, alias: t.Optional[t.Any] = None
     ) -> T_SQLMODEL_QUERY:
-        return query.filter(self.get_column(alias) > value)
+        column = self.get_column(alias)
+
+        # Check if this is a property filter that needs post-query processing
+        if (
+            isinstance(column, tuple)
+            and len(column) == 2
+            and column[0] == "__PROPERTY_FILTER__"
+        ):
+            query._property_filters = getattr(query, "_property_filters", [])  # type: ignore[union-attr]
+            query._property_filters.append((column[1], "greater", value))  # type: ignore[union-attr]
+            return query
+
+        return query.filter(column > value)
 
     def operation(self) -> str:
         return lazy_gettext("greater than")
 
 
 class FilterSmaller(BaseSQLModelFilter):
+    """
+    Less-than filter for SQLModel fields.
+
+    Supports both regular columns and computed fields/properties.
+    For computed fields without sql_expression, uses post-query filtering
+    with automatic numeric conversion.
+    """
+
     def apply(
         self, query: T_SQLMODEL_QUERY, value: t.Any, alias: t.Optional[t.Any] = None
     ) -> T_SQLMODEL_QUERY:
-        return query.filter(self.get_column(alias) < value)
+        column = self.get_column(alias)
+
+        # Check if this is a property filter that needs post-query processing
+        if (
+            isinstance(column, tuple)
+            and len(column) == 2
+            and column[0] == "__PROPERTY_FILTER__"
+        ):
+            query._property_filters = getattr(query, "_property_filters", [])  # type: ignore[union-attr]
+            query._property_filters.append((column[1], "smaller", value))  # type: ignore[union-attr]
+            return query
+
+        return query.filter(column < value)
 
     def operation(self) -> str:
         return lazy_gettext("smaller than")
@@ -270,6 +322,11 @@ class FilterNotInList(FilterInList):
 
 
 # Customized type filters
+# Note: These typed filter classes are structurally identical to SQLAlchemy versions,
+# but must inherit from SQLModel base operations to support
+# computed field functionality.
+# Due to SQLModel's additional property/computed field features, significant refactoring
+# would compromise functionality, so this duplication is intentional and necessary.
 class BooleanEqualFilter(FilterEqual, filters.BaseBooleanFilter):
     pass
 

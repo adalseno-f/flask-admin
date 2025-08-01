@@ -38,7 +38,8 @@ flask_admin/contrib/sqlmodel/
 - **Features**:
   - CRUD operations for SQLModel models
   - Query building and execution with UUID primary key support
-  - **Property filtering with smart query routing and pagination**
+  - **Computed field and property filtering with automatic SQL/Python fallback**
+  - **Performance optimization via sql_expression methods**
   - Template rendering and response handling
   - Pagination, sorting, and search functionality
   - Integration with Flask-Admin base functionality
@@ -63,6 +64,8 @@ flask_admin/contrib/sqlmodel/
   - **Primary key type conversion from URL parameters** (`get_primary_key_types`, `convert_pk_from_url`)
   - Type annotation analysis and conversion
   - **Enhanced property and computed field detection with setter validation**
+  - **sql_expression method detection for performance optimization**
+  - **ModelField dataclass with comprehensive metadata including optimization markers**
   - Relationship handling and foreign key resolution
   - Compatibility bridging between SQLModel and SQLAlchemy
 
@@ -73,7 +76,10 @@ flask_admin/contrib/sqlmodel/
 - **Key Classes**: `BaseSQLModelFilter`, various filter classes for different data types
 - **Features**:
   - Advanced filtering capabilities for database fields
+  - **Automatic computed field and property filtering support**
   - **Post-query property filtering with special markers** (`__PROPERTY_FILTER__`)
+  - **SQL-level optimization via sql_expression methods**
+  - **Automatic fallback to Python filtering with performance warnings**
   - Search functionality across model fields
   - Custom filter widgets and operators
   - Integration with SQLModel query system
@@ -199,8 +205,27 @@ flask_admin/contrib/sqlmodel/
 - Enhanced coercion functions for Pydantic types in form processing
 - Consistent validation patterns across all Pydantic field types
 
+#### **Advanced Computed Field Support** 🚀
+- **Automatic Detection**: Both `@computed_field` and `@property` with setters are automatically supported
+- **Dual Filtering Approach**: SQL-level filtering when `sql_expression` methods are available, Python-level fallback otherwise
+- **Performance Optimization**: `sql_expression` methods enable database-level filtering and sorting for large datasets
+- **Automatic Warnings**: Performance warnings for computed fields without SQL expressions on large datasets
+- **Comprehensive Operations**: Full support for equals, not_equals, contains, greater_than, less_than operations
+- **Numeric Conversion**: Automatic type conversion for numeric comparisons in post-query filtering
+- **Form Integration**: Properties with setters are automatically form-compatible for editing
+- **Seamless Pagination**: Property filters work correctly with pagination and sorting
+
+#### **SQL Expression Performance Layer**
+- **Optional SQL Optimization**: Add `@field.sql_expression` methods to computed fields for database-level operations
+- **Automatic Fallback**: Graceful degradation to Python filtering when SQL expressions fail or aren't available
+- **Legacy Support**: Maintains backward compatibility with existing hardcoded patterns
+- **Warning System**: Proactive performance warnings guide users toward optimization
+- **Developer Experience**: Clear documentation and examples for implementing SQL expressions
+
 #### **Comprehensive Test Coverage**
 - Extensive test suite covering all major functionality
+- **Computed field filtering and sorting tests**
+- **SQL expression optimization tests**
 - Property filtering pagination tests
 - UUID CRUD operation tests
 - Field class override tests
@@ -225,10 +250,13 @@ flowchart TD
     C --> G[SQLModelView.index_view]
     G --> H[Build Query via tools.py]
     H --> I[Apply Filters via filters.py]
-    I --> II{Property Filters?}
-    II -->|Yes| III[Post-Query Property Filtering]
-    II -->|No| J[Format Data via typefmt.py]
-    III --> IIII[Apply Property Filters & Pagination]
+    I --> II{Computed Field Filters?}
+    II -->|Yes| III{SQL Expression Available?}
+    III -->|Yes| IIIA[Apply SQL Expression]
+    III -->|No| IIIB[Mark for Post-Query Processing]
+    IIIA --> J[Format Data via typefmt.py]
+    IIIB --> IIII[Post-Query Property Filtering & Pagination]
+    II -->|No| J
     IIII --> J
     J --> K[Render Template]
 

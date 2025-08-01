@@ -31,6 +31,10 @@ from wtforms import validators
 from flask_admin import form
 from flask_admin._compat import iteritems
 from flask_admin._compat import text_type
+from flask_admin.contrib.sqla.form import _resolve_prop
+
+# Import utility functions from SQLAlchemy version to avoid duplication
+from flask_admin.contrib.sqla.form import avoid_empty_strings
 from flask_admin.form import BaseForm
 from flask_admin.model.fields import AjaxSelectField
 from flask_admin.model.fields import AjaxSelectMultipleField
@@ -1069,17 +1073,7 @@ class AdminModelConverter(ModelConverterBase, SQLAlchemyExtendedMixin):
         return form.TimeField(**field_args)
 
 
-def avoid_empty_strings(value):
-    """
-    Return None if the incoming value is an empty string or whitespace.
-    """
-    if value:
-        try:
-            value = value.strip()
-        except AttributeError:
-            # values are not always strings
-            pass
-    return value if value else None
+# avoid_empty_strings imported at top of file
 
 
 def choice_type_coerce_factory(type_):
@@ -1112,18 +1106,7 @@ def choice_type_coerce_factory(type_):
         return simple_coerce
 
 
-def _resolve_prop(prop):
-    """
-    Resolve proxied property
-
-    :param prop:
-        Property to resolve
-    """
-    # Try to see if it is proxied property
-    if hasattr(prop, "_proxied_property"):
-        return prop._proxied_property
-
-    return prop
+# _resolve_prop imported at top of file
 
 
 # Get list of fields and generate form

@@ -12,7 +12,8 @@ Utility functions and data structures for SQLModel introspection and analysis.
         :members:
 
         Enhanced dataclass for storing SQLModel field metadata, including support
-        for field class overrides and property/computed field detection.
+        for field class overrides, property/computed field detection, and
+        sql_expression methods for performance optimization.
 
     Core Utility Functions
     ----------------------

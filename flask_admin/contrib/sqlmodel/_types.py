@@ -2,7 +2,9 @@
 Type definitions for SQLModel contrib module.
 
 This module provides centralized type definitions for the SQLModel integration,
-following the pattern established in flask_admin._types.
+following the pattern established in flask_admin._types. The typing approach
+balances specificity with practicality, using more specific types where
+beneficial while using Any for complex SQLModel/Pydantic interactions.
 """
 
 import sys

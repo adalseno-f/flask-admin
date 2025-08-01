@@ -38,6 +38,7 @@ Properties with both getter and setter are automatically supported for display a
 .. code-block:: python
 
     from sqlmodel import SQLModel, Field
+    from pydantic import computed_field
 
     class User(SQLModel, table=True):
         first_name: str
@@ -52,9 +53,45 @@ Properties with both getter and setter are automatically supported for display a
             # Setter required for Flask-Admin detection
             pass
 
+        @computed_field
+        @property
+        def display_name(self) -> str:
+            return f"{self.first_name} {self.last_name}".title()
+
     class UserAdmin(SQLModelView):
-        column_list = ['first_name', 'last_name', 'full_name']
-        column_filters = ['full_name']
+        column_list = ['first_name', 'last_name', 'full_name', 'display_name']
+        column_filters = ['full_name', 'display_name']
+
+**Performance Optimization with sql_expression**
+
+For better performance with large datasets, computed fields can provide SQL expressions:
+
+.. code-block:: python
+
+    from sqlmodel import SQLModel, Field
+    from pydantic import computed_field
+    from sqlalchemy import column
+
+    class Product(SQLModel, table=True):
+        width: int
+        height: int
+
+        @computed_field
+        @property
+        def area(self) -> int:
+            return self.width * self.height
+
+        @area.sql_expression
+        @staticmethod
+        def area_sql_expression(alias=None):
+            if alias is None:
+                return column("width") * column("height")
+            else:
+                return alias.width * alias.height
+
+    class ProductAdmin(SQLModelView):
+        column_filters = ['area']  # Uses SQL expression for optimal performance
+        column_default_sort = 'area'
 
 **UUID Primary Keys**
 

@@ -48,33 +48,41 @@ class TestImportFallbacks:
 class TestBaseSQLModelFilterComputed:
     """Test BaseSQLModelFilter computed field handling."""
 
-    def test_convert_computed_field_known_pattern(self):
-        """Test computed field conversion with known pattern."""
-        # Create a mock property with specific function name
+    def test_convert_computed_field_generic_handling(self):
+        """Test computed field conversion with generic handling."""
+        # Create a mock property with any function name
         mock_prop = Mock()
         mock_fget = Mock()
-        mock_fget.__name__ = "number_of_pixels"
+        mock_fget.__name__ = "any_computed_field"
         mock_prop.fget = mock_fget
 
         filter_instance = BaseSQLModelFilter(column=Mock(), name="test")
         result = filter_instance._convert_computed_field_to_sql(mock_prop)
 
-        # Should return tuple for known pattern
-        assert result == ("computed_number_of_pixels", mock_prop)
-
-    def test_convert_computed_field_unknown_pattern(self):
-        """Test computed field conversion with unknown pattern."""
-        # Create a mock property with unknown function name
-        mock_prop = Mock()
-        mock_fget = Mock()
-        mock_fget.__name__ = "unknown_function"
-        mock_prop.fget = mock_fget
-
-        filter_instance = BaseSQLModelFilter(column=Mock(), name="test")
-        result = filter_instance._convert_computed_field_to_sql(mock_prop)
-
-        # Should return property as-is
+        # Should return property as-is (generic approach)
         assert result == mock_prop
+
+    def test_convert_computed_field_different_names(self):
+        """Test computed field conversion with different function names."""
+        # Test with various function names - all should be handled generically
+        test_names = [
+            "full_name",
+            "phone_number",
+            "unknown_function",
+            "number_of_pixels",
+        ]
+
+        for func_name in test_names:
+            mock_prop = Mock()
+            mock_fget = Mock()
+            mock_fget.__name__ = func_name
+            mock_prop.fget = mock_fget
+
+            filter_instance = BaseSQLModelFilter(column=Mock(), name="test")
+            result = filter_instance._convert_computed_field_to_sql(mock_prop)
+
+            # Should return property as-is for all names (generic approach)
+            assert result == mock_prop
 
     def test_convert_computed_field_no_fget(self):
         """Test computed field conversion with no fget."""
@@ -104,29 +112,23 @@ class TestBaseSQLModelFilterComputed:
 class TestBaseSQLModelFilterGetColumn:
     """Test BaseSQLModelFilter.get_column method."""
 
-    def test_get_column_computed_number_of_pixels(self):
-        """Test get_column with computed number_of_pixels."""
-        # Create filter with computed field tuple
-        mock_prop = Mock()
-        computed_column = ("computed_number_of_pixels", mock_prop)
-        filter_instance = BaseSQLModelFilter(column=computed_column, name="test")
+    def test_get_column_computed_property_generic(self):
+        """Test get_column with computed property using generic handling."""
+        # Create filter with property column (no longer hardcoded tuples)
+        mock_prop = Mock(spec=property)
+        # Ensure the mock doesn't have a 'key' attribute so it's treated as a property
+        if hasattr(mock_prop, "key"):
+            del mock_prop.key
+        filter_instance = BaseSQLModelFilter(column=mock_prop, name="test")
 
-        # Mock alias with width and height attributes that can be multiplied
         mock_alias = Mock()
-        mock_width = Mock()
-        mock_height = Mock()
-        mock_result = Mock()
-
-        # Mock the multiplication operation
-        mock_width.__mul__ = Mock(return_value=mock_result)
-        mock_alias.width = mock_width
-        mock_alias.height = mock_height
-
         result = filter_instance.get_column(mock_alias)
 
-        # Should return width * height expression
-        assert result == mock_result
-        mock_width.__mul__.assert_called_once_with(mock_height)
+        # Should return property filter marker tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert result[0] == "__PROPERTY_FILTER__"
+        assert result[1] == mock_prop
 
     def test_get_column_with_key_no_alias(self):
         """Test get_column with column that has key, no alias."""

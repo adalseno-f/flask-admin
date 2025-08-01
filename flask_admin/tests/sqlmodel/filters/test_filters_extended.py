@@ -116,14 +116,14 @@ class TestBaseSQLModelFilter:
 
     def test_init_with_computed_field(self):
         """Test initialization with computed field property."""
-        # Mock a property that looks like number_of_pixels
+        # Mock a property (generic computed field)
         mock_prop = Mock(spec=property)
         mock_prop.fget = Mock()
-        mock_prop.fget.__name__ = "number_of_pixels"
+        mock_prop.fget.__name__ = "any_computed_field"
 
         filter_obj = BaseSQLModelFilter(mock_prop, "Computed Filter")
-        assert isinstance(filter_obj.column, tuple)
-        assert filter_obj.column[0] == "computed_number_of_pixels"
+        # Now all computed fields are handled generically
+        assert filter_obj.column == mock_prop
 
     def test_init_with_unknown_computed_field(self):
         """Test initialization with unknown computed field."""
@@ -151,28 +151,27 @@ class TestBaseSQLModelFilter:
         result = filter_obj.get_column(mock_alias)
         assert result == "aliased_field"
 
-    def test_get_column_computed_pixels(self):
-        """Test get_column with computed number_of_pixels field."""
+    def test_get_column_computed_property_generic(self):
+        """Test get_column with computed property using generic handling."""
         mock_prop = Mock(spec=property)
         mock_prop.fget = Mock()
-        mock_prop.fget.__name__ = "number_of_pixels"
+        mock_prop.fget.__name__ = "any_computed_field"
 
-        filter_obj = BaseSQLModelFilter(mock_prop, "Pixels Filter")
+        filter_obj = BaseSQLModelFilter(mock_prop, "Generic Filter")
 
-        # Without alias - should create raw SQL expression
+        # Should return property filter marker for post-query filtering
         result = filter_obj.get_column(None)
-        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert result[0] == "__PROPERTY_FILTER__"
+        assert result[1] == mock_prop
 
-        # With alias - should use alias columns
+        # Same result with alias
         mock_alias = Mock()
-        # Create mock objects that support multiplication
-        mock_width = Mock()
-        mock_height = Mock()
-        mock_width.__mul__ = Mock(return_value="width_times_height_expression")
-        mock_alias.width = mock_width
-        mock_alias.height = mock_height
         result = filter_obj.get_column(mock_alias)
-        assert result is not None
+        assert isinstance(result, tuple)
+        assert result[0] == "__PROPERTY_FILTER__"
+        assert result[1] == mock_prop
 
     def test_get_column_unsupported_computed(self):
         """Test get_column with unsupported computed field -

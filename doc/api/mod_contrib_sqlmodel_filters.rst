@@ -6,9 +6,14 @@ SQLModel filter implementations with support for computed properties and post-qu
 This module provides comprehensive filtering support for SQLModel fields including:
 
 * **Standard field filtering**: Database-level filtering for regular SQLModel fields
-* **Property filtering**: Post-query filtering for computed properties using special markers
-* **Type-specific filters**: Dedicated filter classes for different data types
+* **Computed field filtering**: Automatic support for @computed_field and properties with setters
+* **SQL optimization**: Use sql_expression methods for optimal performance on large datasets
+* **Post-query filtering**: Automatic fallback to Python filtering when SQL expressions aren't available
+* **Type-specific filters**: Dedicated filter classes for different data types with automatic type conversion
 * **Advanced filtering**: Between filters, in-list filters, and custom filter logic
+
+For computed fields without sql_expression methods, filters automatically use post-query Python filtering
+to ensure correct results, with performance warnings for large datasets.
 
 .. automodule:: flask_admin.contrib.sqlmodel.filters
 

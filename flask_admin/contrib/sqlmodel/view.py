@@ -70,12 +70,21 @@ log = logging.getLogger("flask-admin.sqlmodel")
 
 class SQLModelView(BaseModelView):
     """
-    SQLModel model view
+    SQLModel model view with comprehensive support for SQLModel features.
+
+    This view provides automatic support for:
+    - Standard SQLModel fields with proper form generation
+    - Computed fields (@computed_field) with automatic filtering and sorting
+    - Properties with setters for form compatibility
+    - Relationships with foreign key handling
+    - SQLAlchemy-Utils field types
+    - Performance optimization via sql_expression methods
 
     Usage sample::
 
+        from sqlmodel import Session
         admin = Admin()
-        admin.add_view(SQLModelView(User, db.session))
+        admin.add_view(SQLModelView(User, session))
     """
 
     column_filters = None
@@ -613,9 +622,19 @@ class SQLModelView(BaseModelView):
             # This is a relationship, create filters for related model's columns
             return self._scaffold_relationship_filters(attr, joins, visible_name)
 
-        # Handle Python properties (computed fields)
+        # Handle Python properties: computed fields OR properties with setters
         if isinstance(attr, property):
-            return self._scaffold_property_filters(attr, name_str, joins, visible_name)
+            # Check if this is a computed field (has Pydantic computed field marker)
+            is_computed_field = hasattr(attr, "__pydantic_computed_field__")
+            # Check if this property has a setter (making it form-compatible)
+            has_setter = attr.fset is not None
+
+            if is_computed_field or has_setter:
+                return self._scaffold_property_filters(
+                    attr, name_str, joins, visible_name
+                )
+            # Regular read-only @property fields are handled by the parent class
+            return None
 
         # Check if the attribute has a type
         if not hasattr(attr, "type"):
@@ -723,16 +742,45 @@ class SQLModelView(BaseModelView):
         self, prop: property, name_str: str, joins: list[t.Any], visible_name: str
     ) -> T_FILTER_LIST:
         """
-        Create filters for Python properties (computed fields).
+        Create filters for Python properties.
 
-        This method analyzes the property to determine if it can be filtered.
-        For simple properties that concatenate/format database fields, it creates
-        appropriate string filters.
+        Handles both:
+        - Computed fields (@computed_field) from Pydantic
+        - Regular properties with setters (form-compatible)
+
+        This method creates appropriate string filters for the property.
+        For computed fields without sql_expression methods, it warns about
+        potential performance issues with large datasets.
+
+        Args:
+            prop: The property object to create filters for
+            name_str: The string name of the property
+            joins: List of joins needed for the property
+            visible_name: Human-readable name for the filter
+
+        Returns:
+            List of filter objects for the property
         """
         try:
-            # For now, create a generic string filter for properties
-            # This assumes most computed properties return string values
-            # More sophisticated analysis could be added later
+            # Check if the computed field has SQL expression for optimization
+            has_sql_expression = hasattr(prop, "sql_expression") and callable(
+                prop.sql_expression
+            )
+
+            if not has_sql_expression:
+                # Only warn for actual computed fields,
+                # not regular properties with setters
+                if hasattr(prop, "__pydantic_computed_field__"):
+                    import warnings
+
+                    warnings.warn(
+                        f"Computed field '{name_str}' will use post-query filtering"
+                        f" which may be slow for large datasets. "
+                        f"Consider adding a 'sql_expression' method to the computed "
+                        f"field for better performance. See documentation for details.",
+                        UserWarning,
+                        stacklevel=3,
+                    )
 
             # Create a string filter for the property
             from flask_admin.contrib.sqlmodel.filters import FilterEqual
@@ -1036,8 +1084,34 @@ class SQLModelView(BaseModelView):
 
     def _get_computed_field_sort_expression(self, sort_field, alias):
         """
-        Create SQL expression for sorting on computed fields.
+        Create SQL expression for sorting on computed fields and properties.
+
+        This method supports two approaches:
+        1. sql_expression method: If the property has a sql_expression method,
+           it will be called to get the SQL expression for optimal performance
+        2. Legacy patterns: Falls back to hardcoded patterns for specific fields
+        3. Post-processing: Returns None to trigger Python-level sorting
+
+        Args:
+            sort_field: The property/computed field to sort by
+            alias: SQLAlchemy alias for the table (used in joins)
+
+        Returns:
+            SQLAlchemy expression for sorting, or None for post-processing
         """
+        # Check if the computed field has a sql_expression method
+        if hasattr(sort_field, "sql_expression") and callable(
+            sort_field.sql_expression
+        ):
+            try:
+                return sort_field.sql_expression(alias)
+            except Exception as e:
+                import logging
+
+                logging.warning(f"sql_expression method failed for {sort_field}: {e}")
+                return None
+
+        # Legacy fallback for hardcoded patterns
         prop_func = sort_field.fget
         if prop_func and hasattr(prop_func, "__name__"):
             func_name = prop_func.__name__
@@ -1051,42 +1125,55 @@ class SQLModelView(BaseModelView):
                 else:
                     return alias.width * alias.height
 
-        # For unknown computed fields, we can't sort
-        raise NotImplementedError(
-            f"Cannot sort on computed field {sort_field}. "
-            "Only specific computed fields are supported for sorting."
+        # Return None to indicate no SQL expression available (will use post-processing)
+        import warnings
+
+        warnings.warn(
+            f"Computed field '{sort_field}' will use post-query sorting "
+            f"which may be slow for large datasets. "
+            f"Consider adding a 'sql_expression' method to the computed "
+            f"field for better performance. See documentation for details.",
+            UserWarning,
+            stacklevel=4,
         )
+        return None
 
     def _get_computed_field_search_expression(self, search_field, alias):
         """
-        Create SQL expression for searching on computed fields.
+        Create SQL expression for searching on computed fields and properties.
+
+        This method attempts to create SQL expressions for searching computed fields:
+        1. sql_expression method: If available, calls the method for SQL-level search
+        2. Post-processing: Returns None to indicate Python-level filtering needed
+
+        Most computed fields cannot be easily searched at SQL level since they
+        often combine multiple fields or perform complex calculations.
+
+        Args:
+            search_field: The property/computed field to search
+            alias: SQLAlchemy alias for the table (used in joins)
+
+        Returns:
+            SQLAlchemy expression for searching, or None for post-processing
         """
-        prop_func = search_field.fget
-        if prop_func and hasattr(prop_func, "__name__"):
-            func_name = prop_func.__name__
+        # Check if the computed field has a sql_expression method
+        if hasattr(search_field, "sql_expression") and callable(
+            search_field.sql_expression
+        ):
+            try:
+                return search_field.sql_expression(alias)
+            except Exception as e:
+                import logging
 
-            # Handle known computed field patterns
-            if func_name == "number_of_pixels":
-                if alias is None:
-                    from sqlalchemy import column
+                logging.warning(f"sql_expression method failed for {search_field}: {e}")
+                return None
 
-                    return column("width") * column("height")
-                else:
-                    return alias.width * alias.height
-            elif func_name == "number_of_pixels_str":
-                # This returns the string representation of number_of_pixels
-                if alias is None:
-                    from sqlalchemy import column
+        # For computed fields without sql_expression, we generally cannot create
+        # a meaningful search expression since they often combine multiple fields
+        # or perform calculations that can't be easily reversed into SQL WHERE clauses.
 
-                    return cast(column("width") * column("height"), String)
-                else:
-                    return cast(alias.width * alias.height, String)
-
-        # For unknown computed fields, we can't search
-        raise NotImplementedError(
-            f"Cannot search on computed field {search_field}. "
-            "Only specific computed fields are supported for searching."
-        )
+        # Return None to indicate this field should be skipped for search
+        return None
 
     def _get_default_order(self):
         order = super()._get_default_order()
@@ -1133,6 +1220,9 @@ class SQLModelView(BaseModelView):
                 # Handle computed fields
                 if isinstance(field, property):
                     column = self._get_computed_field_search_expression(field, alias)
+                    # Skip fields that cannot be searched (when method returns None)
+                    if column is None:
+                        continue
                     if count_query is not None:
                         count_column = self._get_computed_field_search_expression(
                             field, count_alias
@@ -1201,8 +1291,16 @@ class SQLModelView(BaseModelView):
         """
         Apply property filters to the results after query execution.
 
-        This handles filtering on computed properties
-        that can't be filtered at the SQL level.
+        This handles filtering on computed fields and properties that can't be
+        filtered at the SQL level. Used when sql_expression methods are not
+        available or when they fail.
+
+        Args:
+            query: The original query (used to get stored filter info)
+            models: List of model instances to filter
+
+        Returns:
+            Filtered list of model instances
         """
         # Check if there are any property filters to apply
         property_filters = getattr(query, "_property_filters", [])
@@ -1221,6 +1319,20 @@ class SQLModelView(BaseModelView):
     def _filter_models_by_property(self, models, prop, operation, value):
         """
         Filter a list of models based on a property value and operation.
+
+        Supports various operations:
+        - equals, not_equals: String comparison (case-insensitive)
+        - contains, not_contains: Substring search (case-insensitive)
+        - greater, smaller: Numeric comparison (attempts float conversion)
+
+        Args:
+            models: List of model instances to filter
+            prop: Property object with fget method
+            operation: String operation type
+            value: Value to compare against
+
+        Returns:
+            Filtered list of model instances matching the criteria
         """
         if not models or not value:
             return models
@@ -1235,20 +1347,39 @@ class SQLModelView(BaseModelView):
                 if prop_value is None:
                     continue
 
-                # Convert to string for comparison
-                prop_str = str(prop_value).lower()
-                value_str = str(value).lower()
+                # For numeric comparisons, try to convert to numbers first
+                if operation in ("greater", "smaller"):
+                    try:
+                        prop_num = float(prop_value)
+                        value_num = float(value)
 
-                # Apply the operation
-                if operation == "equals":
-                    if prop_str == value_str:
-                        filtered.append(model)
-                elif operation == "not_equals":
-                    if prop_str != value_str:
-                        filtered.append(model)
-                elif operation == "contains":
-                    if value_str in prop_str:
-                        filtered.append(model)
+                        if operation == "greater":
+                            if prop_num > value_num:
+                                filtered.append(model)
+                        elif operation == "smaller":
+                            if prop_num < value_num:
+                                filtered.append(model)
+                    except (ValueError, TypeError):
+                        # If conversion fails, skip this model
+                        continue
+                else:
+                    # Convert to string for comparison
+                    prop_str = str(prop_value).lower()
+                    value_str = str(value).lower()
+
+                    # Apply the operation
+                    if operation == "equals":
+                        if prop_str == value_str:
+                            filtered.append(model)
+                    elif operation == "not_equals":
+                        if prop_str != value_str:
+                            filtered.append(model)
+                    elif operation == "contains":
+                        if value_str in prop_str:
+                            filtered.append(model)
+                    elif operation == "not_contains":
+                        if value_str not in prop_str:
+                            filtered.append(model)
 
             except (AttributeError, TypeError, ValueError):
                 # If property evaluation fails, skip this model

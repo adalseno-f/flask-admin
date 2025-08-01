@@ -85,6 +85,46 @@ def is_numberic_validator(form, field):
 
 
 class UserAdmin(sqlmodel.SQLModelView):
+    def _get_computed_field_search_expression(self, search_field, alias):
+        """
+        Custom search expressions for computed fields in User model.
+        Returns the column expression that will be used for searching.
+        """
+        prop_func = search_field.fget
+        if prop_func and hasattr(prop_func, "__name__"):
+            func_name = prop_func.__name__
+
+            if func_name == "full_name":
+                # Return a concatenated expression of first_name and last_name
+                from sqlalchemy import func
+
+                if alias is None:
+                    from sqlalchemy import column
+
+                    return func.concat(
+                        func.coalesce(column("first_name"), ""),
+                        " ",
+                        func.coalesce(column("last_name"), ""),
+                    )
+                else:
+                    return func.concat(
+                        func.coalesce(alias.first_name, ""),
+                        " ",
+                        func.coalesce(alias.last_name, ""),
+                    )
+            elif func_name == "phone_number":
+                # Search in the local_phone_number field (most relevant part)
+                if alias is None:
+                    from sqlalchemy import column
+
+                    return column("local_phone_number")
+                else:
+                    return alias.local_phone_number
+
+        # For other computed fields, use parent's implementation (returns None)
+        return super()._get_computed_field_search_expression(search_field, alias)
+
+    # UserAdmin class attributes continue here
     can_set_page_size = True
     page_size = 5
     page_size_options = (5, 10, 15)

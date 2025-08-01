@@ -1,26 +1,32 @@
 """
 SQLModel validators for Flask-Admin forms.
 
-This module provides validation functions and classes for SQLModel forms,
-including uniqueness validation, currency validation, color validation,
-and other common field validators.
+This module provides SQLModel-specific validators by inheriting from SQLAlchemy
+validators and overriding query methods to use SQLModel's select() syntax.
+The base validation logic is reused while adapting for SQLModel's query patterns.
 """
 
 import typing as t
 
 from sqlmodel import select
 from wtforms import ValidationError
-from wtforms.validators import InputRequired
 
-from flask_admin._compat import filter_list
+# Import from main types module
+from flask_admin._types import T_TRANSLATABLE
+
+# Import common validators from SQLAlchemy version to avoid duplication
 from flask_admin.babel import lazy_gettext
+from flask_admin.contrib.sqla.validators import ItemsRequired
+from flask_admin.contrib.sqla.validators import TimeZoneValidator
+from flask_admin.contrib.sqla.validators import Unique as SQLAUnique
+from flask_admin.contrib.sqla.validators import valid_color
+from flask_admin.contrib.sqla.validators import valid_currency
 
-from ..._types import T_SQLALCHEMY_MODEL
-from ..._types import T_SQLALCHEMY_SESSION
-from ..._types import T_TRANSLATABLE
+# Import SQLModel-specific types
+from flask_admin.contrib.sqlmodel._types import T_SQLMODEL_SESSION_TYPE
 
 
-class Unique:
+class Unique(SQLAUnique):
     """Checks field value unicity against specified table field.
 
     :param db_session:
@@ -33,16 +39,15 @@ class Unique:
         The error message.
     """
 
-    field_flags = {"unique": True}
-
     def __init__(
         self,
-        db_session: T_SQLALCHEMY_SESSION,
-        model: T_SQLALCHEMY_MODEL,
+        db_session: T_SQLMODEL_SESSION_TYPE,
+        model: t.Any,  # Use loose typing like SQLAlchemy version
         column: t.Any,
         message: t.Optional[T_TRANSLATABLE] = None,
     ) -> None:
-        self.db_session = db_session
+        # Override to accept model instance instead of model class type
+        self.db_session = db_session  # type: ignore[assignment]
         self.model = model
         self.column = column
         self.message = message or lazy_gettext("Already exists.")
@@ -53,6 +58,8 @@ class Unique:
             return
 
         try:
+            # Override query logic to use SQLModel's select() syntax
+            # instead of session.query()
             obj = self.db_session.exec(  # type: ignore[attr-defined]
                 select(self.model).where(self.column == field.data)
             ).one()
@@ -68,30 +75,11 @@ class Unique:
             pass
 
 
-class ItemsRequired(InputRequired):
-    """
-    A version of the ``InputRequired`` validator that works with relations,
-    to require a minimum number of related items.
-    """
-
-    def __init__(self, min=1, message=None):
-        super().__init__(message=message)
-        self.min = min
-
-    def __call__(self, form, field):
-        items = filter_list(lambda e: not field.should_delete(e), field.entries)
-        if len(items) < self.min:
-            if self.message is None:
-                message = field.ngettext(
-                    "At least %(num)d item is required",
-                    "At least %(num)d items are required",
-                    self.min,
-                )
-            else:
-                message = self.message
-
-            raise ValidationError(message)
-
-
-# Note: SQLAlchemy-utils specific validators have been moved to
-# SQLAlchemyExtendedMixin in mixins.py for better dependency management
+# Re-export imported validators for backwards compatibility
+__all__ = [
+    "Unique",
+    "ItemsRequired",
+    "TimeZoneValidator",
+    "valid_color",
+    "valid_currency",
+]
